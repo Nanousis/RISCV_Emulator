@@ -1,6 +1,6 @@
 pub type Addr = u32;
 
-pub trait Device {
+pub trait Device: Send {
     /// `size` must be 1, 2, or 4. Address is device-local (offset) in this impl.
     fn read(&mut self, size: u8, addr: Addr) -> u32;
     fn write(&mut self, size: u8, addr: Addr, value: u32) -> Result<(), ()>;

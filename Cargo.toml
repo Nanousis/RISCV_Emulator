@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 colored = "2"
+eframe = { version = "0.32.3", features = ["wgpu"] }
+env_logger = "0.11.8"
+image = "0.25.8"

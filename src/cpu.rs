@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use colored::*;
 
 // cpu.rs
@@ -73,6 +71,7 @@ pub struct Cpu {
     bus: Bus,
     cycles: u64,
 }
+
 
 const OPCODE_MASK: u32 = 0x7F;
 
@@ -199,22 +198,22 @@ impl Cpu {
                 match funct3 {
                     FUNCT3_ADDI => {
                         let temp = self.read_reg(rs1 as usize).wrapping_add(imm);
-                        self.write_reg(_rd as usize, temp as u32);
+                        self.write_reg(_rd as usize, temp);
                         mnemonic = format!("addi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
                     }
                     FUNCT3_XORI => {
                         let temp = self.read_reg(rs1 as usize) ^ imm;
-                        self.write_reg(_rd as usize, temp as u32);
+                        self.write_reg(_rd as usize, temp);
                         mnemonic = format!("xori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
                     }
                     FUNCT3_ORI => {
                         let temp = self.read_reg(rs1 as usize) | imm;
-                        self.write_reg(_rd as usize, temp as u32);
+                        self.write_reg(_rd as usize, temp);
                         mnemonic = format!("ori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
                     }
                     FUNCT3_ANDI => {
                         let temp = self.read_reg(rs1 as usize) & imm;
-                        self.write_reg(_rd as usize, temp as u32);
+                        self.write_reg(_rd as usize, temp);
                         mnemonic = format!("andi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
                     }
                     FUNCT3_SLLI => {
@@ -259,7 +258,7 @@ impl Cpu {
                     FUNCT3_LB => {
                         let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         mnemonic = format!("lb {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
-                        match self.bus.read(1, addr as u32) {
+                        match self.bus.read(1, addr) {
                             Ok(byte) => {
                                 let temp = ((byte as i8) as i32) as u32; // sign-extend
                                 self.write_reg(_rd as usize, temp);
@@ -272,7 +271,7 @@ impl Cpu {
                     FUNCT3_LH => {
                         let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         mnemonic = format!("lh {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
-                        match self.bus.read(2, addr as u32) {
+                        match self.bus.read(2, addr) {
                             Ok(halfword) => {
                                 let temp = ((halfword as i16) as i32) as u32; // sign-extend
                                 self.write_reg(_rd as usize, temp);
@@ -285,7 +284,7 @@ impl Cpu {
                     FUNCT3_LW => {
                         let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         mnemonic = format!("lw {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
-                        match self.bus.read(4, addr as u32) {
+                        match self.bus.read(4, addr) {
                             Ok(word) => {
                                 self.write_reg(_rd as usize, word);
                             },
@@ -297,7 +296,7 @@ impl Cpu {
                     FUNCT3_LBU => {
                         let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         mnemonic = format!("lbu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
-                        match self.bus.read(1, addr as u32) {
+                        match self.bus.read(1, addr) {
                             Ok(byte) => {
                                 let temp = byte; // zero-extend
                                 self.write_reg(_rd as usize, temp);
@@ -310,7 +309,7 @@ impl Cpu {
                     FUNCT3_LHU => {
                         let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         mnemonic = format!("lhu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
-                        match self.bus.read(2, addr as u32) {
+                        match self.bus.read(2, addr) {
                             Ok(halfword) => {
                                 let temp = halfword; // zero-extend
                                 self.write_reg(_rd as usize, temp);
@@ -331,7 +330,7 @@ impl Cpu {
                 let imm = self.sign_extend((imm_11_5 << 5) | imm_4_0, 12);
                 match funct3 {
                     FUNCT3_SB => {
-                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm as u32);
+                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         let value = self.read_reg(rs2 as usize) & 0xFF;
                         mnemonic = format!("sb {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
                         match self.bus.write(1, addr, value) {
@@ -342,7 +341,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_SH => {
-                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm as u32);
+                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         let value = self.read_reg(rs2 as usize) & 0xFFFF;
                         mnemonic = format!("sh {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
                         match self.bus.write(2, addr, value) {
@@ -353,7 +352,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_SW => {
-                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm as u32);
+                        let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                         let value = self.read_reg(rs2 as usize);
                         mnemonic = format!("sw {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
                         match self.bus.write(4, addr, value) {
@@ -377,7 +376,7 @@ impl Cpu {
                 let imm = self.sign_extend((imm_12 << 12) | (imm_11 << 11) | (imm_10_5 << 5) | (imm_4_1 << 1), 13);
                 match funct3 {
                     FUNCT3_BEQ => {
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("beq {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if self.read_reg(rs1 as usize) == self.read_reg(rs2 as usize) {
                             self.pc = address;
@@ -386,7 +385,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_BNE => {
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("bne {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if self.read_reg(rs1 as usize) != self.read_reg(rs2 as usize) {
                             self.pc = address;
@@ -395,7 +394,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_BLT =>{
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("blt {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) {
                             self.pc = address;
@@ -404,7 +403,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_BGE =>{
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("bge {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if (self.read_reg(rs1 as usize) as i32) >= (self.read_reg(rs2 as usize) as i32) {
                             self.pc = address;
@@ -413,7 +412,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_BLTU =>{
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("bltu {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) {
                             self.pc = address;
@@ -422,7 +421,7 @@ impl Cpu {
                         }
                     }
                     FUNCT3_BGEU =>{
-                        let address = self.pc.wrapping_add(imm as u32);
+                        let address = self.pc.wrapping_add(imm);
                         mnemonic = format!("bgeu {} , {}, to 0x{:08X}", rs1, rs2, address);
                         if self.read_reg(rs1 as usize) >= self.read_reg(rs2 as usize) {
                             self.pc = address;
@@ -455,7 +454,7 @@ impl Cpu {
                 let imm = self.sign_extend((imm20 << 20) | (imm19_12 << 12) | (imm11_1 << 11) | (imm10_1 << 1), 21);
                 let addr = self.pc.wrapping_add(imm);
                 self.write_reg(_rd as usize, self.pc.wrapping_add(4));
-                self.pc = addr as u32;
+                self.pc = addr;
                 mnemonic = format!("jal to 0x{addr:08X}");
             }
             I_JALR_FORMAT => {
@@ -464,7 +463,7 @@ impl Cpu {
                 let imm = self.sign_extend((instruction >> 20) & 0xFFF, 12);
                 let addr = self.read_reg(rs1 as usize).wrapping_add(imm) & !1;
                 self.write_reg(_rd as usize, self.pc.wrapping_add(4));
-                self.pc = addr as u32;
+                self.pc = addr;
             }
             I_ENV_FORMAT => {
                 // mnemonic = "ecall/ebreak".to_string();

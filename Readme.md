@@ -1,7 +1,7 @@
 ## Basic Example
 To run you can use cargo. 
 ```
-cargo run --release .\hex_programs\uart_test.hex --limit 27000000  
+cargo run --release ./hex_programs/uart_test.hex --limit 27000000  
 ```
 
 ### Arguments

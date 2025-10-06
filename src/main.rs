@@ -4,13 +4,20 @@ mod bus;
 mod peripherals;
 mod cpu;
 
-use peripherals::{Ram, UartNs16550a};
+use peripherals::{Ram, UartNs16550a, TextMode};
 use bus::Bus;
 use cpu::Cpu;
 use crate::bus::Device;
 use std::time::Instant;
 use std::io;
-use clap::{ArgAction, Parser};
+use clap::{builder::Str, ArgAction, Parser};
+// thread stuff
+use std::sync::mpsc;
+use std::thread;
+use eframe::egui::{self, TextureHandle};
+
+mod gui_app;
+use gui_app::GUIApp;
 
 // Register names mapping
 const REGISTER_NAMES: [&str; 32] = [
@@ -44,22 +51,17 @@ fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error
     Ok(nums)
 }
 
-fn main() {
-    let args = Args::parse();
-    print!("Loading program from: {:?}\n", args);
+struct CtrlMessage {
+    command: Ctrl,
+    data: String,
+}
+enum Ctrl {
+    Data,
+    Stop,
+}
 
-    let file_path = &args.program;
-    let ram_init = parse_hex_file(file_path).expect("Failed to parse hex file");
-    
-    let mut bus = Bus::new();
-    let mut ram = Ram::new(1024 * 4096); // 4MB RAM
-    for (i, &value) in ram_init.iter().enumerate() {
-        ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
-    }
-    bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a));
-    bus.add_region(0x8000_0000, ram.size(), Box::new(ram));
-    let mut cpu = Cpu::new(bus, 0x8000_0000);
-
+fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
+    // std::thread::sleep(std::time::Duration::from_secs(2));
     let start = Instant::now();
     let verbose = args.verbose > 0;
     // Start the CPU
@@ -69,6 +71,7 @@ fn main() {
     } else {
         println!("Running for {} cycles.", limit);
     }
+    println!("------------\n");
     for _ in 0..limit {
         let mut input = String::new();
         if args.limit == 0 {
@@ -77,6 +80,14 @@ fn main() {
                 .expect("Failed to read line");
             if input.trim() == "q" || input.trim() == "b" {
                 break;
+            }
+        }
+        if let Ok(msg) = rx.try_recv() {
+            match msg.command {
+                Ctrl::Data => {
+                    unimplemented!();
+                }
+                Ctrl::Stop => break,
             }
         }
         cpu.tick(verbose);
@@ -88,5 +99,57 @@ fn main() {
         }
     }
     let duration = start.elapsed();
+    println!("\n------------");
     println!("CPU execution time: {:?}", duration);
+}
+
+fn main() -> eframe::Result {
+    let args = Args::parse();
+    print!("Loading program from: {:?}\n", args);
+
+    let file_path = &args.program;
+    let ram_init = parse_hex_file(file_path).expect("Failed to parse hex file");
+    
+    // Initiate the thread communication channels
+    let (ctrl_tx, ctrl_rx) = mpsc::channel::<CtrlMessage>();
+    let (mem_tx, mem_rx) = mpsc::channel::<CtrlMessage>();
+    
+    // Cpu and bus initialization.
+    let mut bus = Bus::new();
+    let mut ram = Ram::new(1024 * 4096); // 4MB RAM
+    for (i, &value) in ram_init.iter().enumerate() {
+        ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
+    }
+    let mut vga_text_mode = TextMode::new(mem_tx);
+
+    bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a));
+    bus.add_region(0x0000_0000, ram.size(), Box::new(ram));
+    bus.add_region(0x8800_0000, 1216*2, Box::new(vga_text_mode));
+    let mut cpu = Cpu::new(bus, 0x0000_0000);
+    
+
+    let thread_handle = thread::spawn(move || {
+        cpu_thread(&mut cpu, &args,&ctrl_rx);
+    });
+    
+    // can use try receive to not block
+    // let received = rx.recv().unwrap();
+    // println!("Got: {received}");
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 800.0]).with_min_inner_size([800.0, 480.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "RISCV Emulator",
+        options,
+        Box::new(move |_cc| {
+            let mut app = GUIApp::default();
+            app.mem_rx = Some(mem_rx);
+            app.ctrl_tx = Some(ctrl_tx.clone());
+            Ok(Box::new(app))
+        }),
+    )?;
+    // Not that when using verbose you have to press enter to quit (to exit the other thread).
+    thread_handle.join().unwrap();
+    Ok(())
 }
