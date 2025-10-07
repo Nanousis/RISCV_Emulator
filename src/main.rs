@@ -72,7 +72,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
         println!("Running for {} cycles.", limit);
     }
     println!("------------\n");
-    let _batch = 1000;
+    let _batch = if verbose { 1 } else { 1000 };
     for _ in 0..(limit/_batch) {
         let mut input = String::new();
         if args.limit == 0 {
@@ -114,6 +114,7 @@ fn main() -> eframe::Result {
     // Initiate the thread communication channels
     let (ctrl_tx, ctrl_rx) = mpsc::channel::<CtrlMessage>();
     let (mem_tx, mem_rx) = mpsc::channel::<CtrlMessage>();
+    let (uart_tx, uart_rx) = mpsc::channel::<char>();
     
     // Cpu and bus initialization.
     let mut bus = Bus::new();
@@ -123,7 +124,7 @@ fn main() -> eframe::Result {
     }
     let vga_text_mode = TextMode::new(mem_tx);
 
-    bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a));
+    bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a::new(uart_tx)));
     bus.add_region(0x8000_0000, ram.size(), Box::new(ram));
     bus.add_region(0x8800_0000, 1216*2, Box::new(vga_text_mode));
     let mut cpu = Cpu::new(bus, 0x8000_0000);
@@ -147,6 +148,7 @@ fn main() -> eframe::Result {
             let mut app = GUIApp::default();
             app.mem_rx = Some(mem_rx);
             app.ctrl_tx = Some(ctrl_tx.clone());
+            app.uart_rx = Some(uart_rx);
             Ok(Box::new(app))
         }),
     )?;

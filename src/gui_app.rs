@@ -12,8 +12,10 @@ pub struct GUIApp {
     pub h: usize,
     pub frame: u32,
     pub mem_rx: Option<mpsc::Receiver<CtrlMessage>>,
+    pub uart_rx: Option<mpsc::Receiver<char>>,
     pub ctrl_tx: Option<mpsc::Sender<CtrlMessage>>,
     rgba: Vec<u8>,
+    uart_buffer: String,
 }
 impl eframe::App for GUIApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -32,6 +34,13 @@ impl eframe::App for GUIApp {
         let tex = self.tex.get_or_insert_with(|| {
             ctx.load_texture("pixels", img.clone(), egui::TextureOptions::NEAREST) // NEAREST for crisp pixels
         });
+        if let Some(rx) = &self.uart_rx {
+            while let Ok(c) = rx.try_recv() {
+                // Handle received character
+                self.uart_buffer.push(c);
+            }
+        }
+
         tex.set(img, egui::TextureOptions::NEAREST); // update each frame
 
         egui::CentralPanel::default()
@@ -45,17 +54,25 @@ impl eframe::App for GUIApp {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                 ui.image(&*tex);
                 ui.heading(
-                    RichText::new("Temp VGA-TextMode")
+                    RichText::new("Uart Log")
                         .color(Color32::WHITE)
                         .size(24.0)
                 );
                 ui.add_space(10.0); // 10 px vertical space
-                ui.label(
-                    RichText::new( format!("Frame: {} \n", self.frame))
-                        .monospace()
-                        .color(Color32::LIGHT_GREEN)
-                        .size(18.0)
-                );
+                egui::ScrollArea::vertical()
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.uart_buffer)
+                                .code_editor()              // monospace look
+                                .desired_width(f32::INFINITY)
+                                .desired_rows(6)            // pick how many rows tall it looks
+                                .lock_focus(false)
+                                .interactive(false)         // read-only
+                                .cursor_at_end(true)        // keep caret at end for stick_to_bottom
+                        );
+                    });
+
             });
 
         ctx.request_repaint(); // we’re animating
@@ -81,7 +98,9 @@ impl Default for GUIApp {
             frame: 0,
             mem_rx: None,
             ctrl_tx: None,
+            uart_rx: None,
             rgba: black,
+            uart_buffer: String::new(),
         }
     }
 }
