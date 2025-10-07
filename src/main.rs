@@ -53,7 +53,7 @@ fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error
 
 struct CtrlMessage {
     command: Ctrl,
-    data: String,
+    data: Vec<u8>,
 }
 enum Ctrl {
     Data,
