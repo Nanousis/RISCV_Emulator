@@ -123,9 +123,9 @@ fn main() -> eframe::Result {
     let mut vga_text_mode = TextMode::new(mem_tx);
 
     bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a));
-    bus.add_region(0x0000_0000, ram.size(), Box::new(ram));
+    bus.add_region(0x8000_0000, ram.size(), Box::new(ram));
     bus.add_region(0x8800_0000, 1216*2, Box::new(vga_text_mode));
-    let mut cpu = Cpu::new(bus, 0x0000_0000);
+    let mut cpu = Cpu::new(bus, 0x8000_0000);
     
 
     let thread_handle = thread::spawn(move || {

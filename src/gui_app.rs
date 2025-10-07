@@ -6,7 +6,6 @@ use crate::CtrlMessage;
 use crate::Ctrl;
 
 
-#[derive(Default)]
 pub struct GUIApp {
     pub tex: Option<TextureHandle>,
     pub w: usize,
@@ -21,18 +20,6 @@ impl eframe::App for GUIApp {
         let (w, h) = (800, 480);
         self.w = w; self.h = h;
         self.frame = self.frame.wrapping_add(1);
-
-        // Make a simple animated gradient
-        // for y in 0..h {
-        //     for x in 0..w {
-        //         let i = (y * w + x) * 4;
-        //         rgba[i + 0] = ((x as f32 / 800.0) * 255.0) as u8; // R
-        //         rgba[i + 1] = ((y as f32 / 480.0) * 255.0) as u8; // G
-        //         // rgba[i + 2] = (x as u32) as u8;   // B
-        //         rgba[i + 3] = 255;                           // A
-        //     }
-        // }
-
 
         if let Some(rx) = &self.mem_rx {
             while let Ok(msg) = rx.try_recv() {
@@ -78,6 +65,25 @@ impl eframe::App for GUIApp {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if let Some(tx) = &self.ctrl_tx {
             let _ = tx.send(CtrlMessage { command: Ctrl::Stop, data: Vec::new() });
+        }
+    }
+}
+impl Default for GUIApp {
+    fn default() -> Self {
+        let w = 800;
+        let h = 480;
+        let mut black = vec![0u8; w * h * 4]; // RGBA, all zero = black
+        for i in 0..(w*h) {
+            black[i*4 + 3] = 255; // set alpha to fully opaque
+        }
+        Self {
+            tex: None,
+            w,
+            h,
+            frame: 0,
+            mem_rx: None,
+            ctrl_tx: None,
+            rgba: black,
         }
     }
 }

@@ -138,6 +138,12 @@ const FONT: [[u8; 16]; 128] = [
     [0x00, 0x00, 0x00, 0x00, 0x10, 0x38, 0x6C, 0xC6, 0xC6, 0xC6, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00],
 ];
 
+struct Attribute {
+    fg: [u8; 3],
+    bg: [u8; 3],
+    // blink: bool,
+}
+
 pub struct TextMode {
     pub mem_tx: mpsc::Sender<CtrlMessage>,
     width: u32,
@@ -158,6 +164,41 @@ impl TextMode {
             text_data: vec![0u8; (_TEXT_WIDTH * _TEXT_HEIGHT * 2) as usize], // 2 bytes per character (ASCII + attribute)
         }
     }
+    fn read_attribute(&self, attribute: u8) -> Attribute {
+        let mut fg: [u8; 3] = [255, 255, 255];
+        let mut bg: [u8; 3] = [0, 0, 0];
+        fg = match attribute & 0xF {
+            0x0 => { [0,0,0] }          // Black
+            0x1 => { [127,0,0] }        // Red
+            0x2 => { [0,127,0] }        // Green
+            0x3 => { [127,127,0] }      // Yellow
+            0x4 => { [0,0,127] }        // Blue
+            0x5 => { [127,0,127] }      // Magenta
+            0x6 => { [0, 127, 127] }    // Cyan
+            0x7 => { [64,64,64] }       // Dark gray
+            0x8 => { [128,128,128] }    // Light gray
+            0x9 => { [255, 0, 0] }      // Intense Red
+            0xA => { [0, 255, 0] }      // Intense Green
+            0xB => { [255, 255, 0] }    // Intense Yellow
+            0xC => { [0, 0, 255] }      // Intense Blue
+            0xD => { [255, 0, 255] }    // Intense Magenta
+            0xE => { [0, 255, 255] }    // Intense Cyan
+            0xF => { [255, 255, 255] }  // Intense White
+            _ => { [255, 255, 255] }    // Default to white
+        };
+        bg = match (attribute >> 4) & 0x7 {
+            0x0 => [0, 0, 0],         // Black
+            0x1 => [255, 0, 0],       // Red
+            0x2 => [0, 255, 0],       // Green
+            0x3 => [255, 255, 0],     // Yellow
+            0x4 => [0, 0, 255],       // Blue
+            0x5 => [255, 0, 255],     // Magenta
+            0x6 => [0, 255, 255],     // Cyan
+            0x7 => [255, 255, 255],   // White
+            _ => [0, 0, 0],           // Default to black
+        };
+        Attribute { fg, bg }
+    }
     fn convert_vec_to_img(&self) -> Vec<u8> {
         let mut img_data = vec![0u8; (self.width * self.height * 4) as usize]; // RGBA for each pixel
         for row in 0.._TEXT_HEIGHT {
@@ -165,9 +206,9 @@ impl TextMode {
                 let char_index = ((row * _TEXT_WIDTH + col) * 2) as usize;
                 let char_byte = self.text_data[char_index];
                 // let attr_byte = self.text_data[char_index];
-
-                let fg_color = [255, 255, 255]; // Default to white
-                let bg_color = [0, 0, 0]; // Default to black
+                let attribute = self.read_attribute(self.text_data[char_index + 1]);
+                let fg_color = attribute.fg;
+                let bg_color = attribute.bg;
                 let glyph = if char_byte < 128 {
                     &FONT[char_byte as usize]
                 } else {
