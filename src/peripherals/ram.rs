@@ -6,7 +6,7 @@ pub struct Ram {
 }
 impl Ram {
     pub fn new(size: usize) -> Self {
-        print!("Initialized {} bytes in ram\n", size);
+        println!("Initialized {} bytes in ram", size);
         Self {
             size: size as u32,
             data: vec![0; size],

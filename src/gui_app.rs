@@ -19,14 +19,12 @@ impl eframe::App for GUIApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let (w, h) = (800, 480);
         self.w = w; self.h = h;
-        self.frame = self.frame.wrapping_add(1);
-
+        
+        // For some reason we are one frame behind
         if let Some(rx) = &self.mem_rx {
             while let Ok(msg) = rx.try_recv() {
-                // Handle the received CtrlMessage here
-                // For example, update rgba or other state
                 self.rgba = msg.data.clone();
-                // self.rgba = msg.data;
+                self.frame = self.frame.wrapping_add(1);
             }
         }
 

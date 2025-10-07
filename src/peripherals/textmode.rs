@@ -1,7 +1,4 @@
 use std::sync::mpsc;
-
-use eframe::egui::debug_text::print;
-
 use crate::{bus::{Addr, Device}, Ctrl, CtrlMessage};
 const _FONT_HEIGHT: u32 = 16;
 const _FONT_WIDTH: u32 = 8;
@@ -153,7 +150,7 @@ pub struct TextMode {
 }
 impl TextMode {
     pub fn new(mem_tx: mpsc::Sender<CtrlMessage>) -> Self {
-        print!("Initiated VGA-TextMode\n");
+        println!("Initiated VGA-TextMode");
         let width = 800;
         let height = 480;
         Self {
@@ -165,9 +162,7 @@ impl TextMode {
         }
     }
     fn read_attribute(&self, attribute: u8) -> Attribute {
-        let mut fg: [u8; 3] = [255, 255, 255];
-        let mut bg: [u8; 3] = [0, 0, 0];
-        fg = match attribute & 0xF {
+        let fg: [u8; 3] = match attribute & 0xF {
             0x0 => { [0,0,0] }          // Black
             0x1 => { [127,0,0] }        // Red
             0x2 => { [0,127,0] }        // Green
@@ -186,7 +181,7 @@ impl TextMode {
             0xF => { [255, 255, 255] }  // Intense White
             _ => { [255, 255, 255] }    // Default to white
         };
-        bg = match (attribute >> 4) & 0x7 {
+        let bg: [u8; 3]  = match (attribute >> 4) & 0x7 {
             0x0 => [0, 0, 0],         // Black
             0x1 => [255, 0, 0],       // Red
             0x2 => [0, 255, 0],       // Green
@@ -215,40 +210,37 @@ impl TextMode {
                     &FONT[0] // Use space for unsupported characters
                 };
 
-                for glyph_row in 0..16 {
-                    let glyph_byte = glyph[glyph_row];
+                for (glyph_row, glyph_byte) in glyph.iter().enumerate() {
                     for bit in 0..8 {
                         let pixel_on = (glyph_byte >> (7 - bit)) & 1 == 1;
                         let color = if pixel_on { fg_color } else { bg_color };
 
                         let x = col * 8 + bit;
                         let y = row * 16 + glyph_row as u32;
-                        if x < self.width && y < self.height {
-                            if x * 2 < self.width && y * 2 < self.height {
-                                let pixel_index = ((y * 2 * self.width + x * 2) * 4) as usize;
-                                // Set pixel color in RGBA format for 2x horizontal and vertical scaling
-                                // Top-left
-                                img_data[pixel_index] = color[0];
-                                img_data[pixel_index + 1] = color[1];
-                                img_data[pixel_index + 2] = color[2];
-                                img_data[pixel_index + 3] = 255;
-                                // Top-right
-                                img_data[pixel_index + 4] = color[0];
-                                img_data[pixel_index + 5] = color[1];
-                                img_data[pixel_index + 6] = color[2];
-                                img_data[pixel_index + 7] = 255;
-                                // Bottom-left
-                                let bottom_pixel_index = pixel_index + self.width as usize * 4;
-                                img_data[bottom_pixel_index] = color[0];
-                                img_data[bottom_pixel_index + 1] = color[1];
-                                img_data[bottom_pixel_index + 2] = color[2];
-                                img_data[bottom_pixel_index + 3] = 255;
-                                // Bottom-right
-                                img_data[bottom_pixel_index + 4] = color[0];
-                                img_data[bottom_pixel_index + 5] = color[1];
-                                img_data[bottom_pixel_index + 6] = color[2];
-                                img_data[bottom_pixel_index + 7] = 255;
-                            }
+                        if x * 2 < self.width && y * 2 < self.height {
+                            let pixel_index = ((y * 2 * self.width + x * 2) * 4) as usize;
+                            // Set pixel color in RGBA format for 2x horizontal and vertical scaling
+                            // Top-left
+                            img_data[pixel_index] = color[0];
+                            img_data[pixel_index + 1] = color[1];
+                            img_data[pixel_index + 2] = color[2];
+                            img_data[pixel_index + 3] = 255;
+                            // Top-right
+                            img_data[pixel_index + 4] = color[0];
+                            img_data[pixel_index + 5] = color[1];
+                            img_data[pixel_index + 6] = color[2];
+                            img_data[pixel_index + 7] = 255;
+                            // Bottom-left
+                            let bottom_pixel_index = pixel_index + self.width as usize * 4;
+                            img_data[bottom_pixel_index] = color[0];
+                            img_data[bottom_pixel_index + 1] = color[1];
+                            img_data[bottom_pixel_index + 2] = color[2];
+                            img_data[bottom_pixel_index + 3] = 255;
+                            // Bottom-right
+                            img_data[bottom_pixel_index + 4] = color[0];
+                            img_data[bottom_pixel_index + 5] = color[1];
+                            img_data[bottom_pixel_index + 6] = color[2];
+                            img_data[bottom_pixel_index + 7] = 255;
                         }
                     }
                 }
@@ -259,9 +251,8 @@ impl TextMode {
     #[allow(dead_code)]
     fn convert_vec_to_string(&self) -> String {
         let mut result = String::new();
-        let mut i = 0;
-        for chunk in self.text_data.chunks(2) {
-            if let Some(&char_byte) = chunk.get(0) {
+        for (i, chunk) in self.text_data.chunks(2).enumerate() {
+            if let Some(&char_byte) = chunk.first() {
                 if char_byte == 0 {
                     result.push(' '); // Replace null bytes with space
                     if i % 64 == 64 - 1 {
@@ -273,7 +264,6 @@ impl TextMode {
                     result.push('?'); // Replace invalid characters with '?'
                 }
             }
-            i += 1;
         }
         result
     }
@@ -310,9 +300,13 @@ impl Device for TextMode {
             2 => {
                 let bytes = (value as u16).to_le_bytes(); // 2 bytes
                 // let str = self.convert_vec_to_string();
-                self.screen_data = self.convert_vec_to_img();
-                let _ = self.mem_tx.send(CtrlMessage { command: Ctrl::Data, data: self.screen_data.clone() });
-                self.text_data[o..o + 2].copy_from_slice(&bytes);
+                if self.text_data[o..o + 2] != bytes {
+                    let data = self.convert_vec_to_img();
+                    self.screen_data = data.clone();
+                    // TODO: Optimize to only update changed character
+                    self.text_data[o..o + 2].copy_from_slice(&bytes);
+                    let _ = self.mem_tx.send(CtrlMessage { command: Ctrl::Data, data });
+                }
             }
             4 => {
                 let bytes = value.to_le_bytes(); // 4 bytes

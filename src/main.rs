@@ -10,11 +10,11 @@ use cpu::Cpu;
 use crate::bus::Device;
 use std::time::Instant;
 use std::io;
-use clap::{builder::Str, ArgAction, Parser};
+use clap::{ArgAction, Parser};
 // thread stuff
 use std::sync::mpsc;
 use std::thread;
-use eframe::egui::{self, TextureHandle};
+use eframe::egui::{self};
 
 mod gui_app;
 use gui_app::GUIApp;
@@ -72,7 +72,8 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
         println!("Running for {} cycles.", limit);
     }
     println!("------------\n");
-    for _ in 0..limit {
+    let _batch = 1000;
+    for _ in 0..(limit/_batch) {
         let mut input = String::new();
         if args.limit == 0 {
             io::stdin()
@@ -90,7 +91,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
                 Ctrl::Stop => break,
             }
         }
-        cpu.tick(verbose);
+        cpu.tick(verbose, _batch);
     }
     if verbose {
         for (i, &name) in REGISTER_NAMES.iter().enumerate() {
@@ -105,7 +106,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
 
 fn main() -> eframe::Result {
     let args = Args::parse();
-    print!("Loading program from: {:?}\n", args);
+    println!("Loading program from: {:?}", args);
 
     let file_path = &args.program;
     let ram_init = parse_hex_file(file_path).expect("Failed to parse hex file");
@@ -120,7 +121,7 @@ fn main() -> eframe::Result {
     for (i, &value) in ram_init.iter().enumerate() {
         ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
     }
-    let mut vga_text_mode = TextMode::new(mem_tx);
+    let vga_text_mode = TextMode::new(mem_tx);
 
     bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a));
     bus.add_region(0x8000_0000, ram.size(), Box::new(ram));

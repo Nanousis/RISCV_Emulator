@@ -26,12 +26,9 @@ impl Bus{
     }
 
     fn find_region(&mut self, addr: Addr) -> Option<&mut Region> {
-        for region in &mut self.regions {
-            if addr >= region.base && addr < region.base + region.size {
-                return Some(region);
-            }
-        }
-        None
+        self.regions.iter_mut()
+            .find(|region| addr >= region.base && addr < region.base + region.size)
+            .map(|v| v as _)
     }
 
     pub fn read(&mut self, size: u8, addr: Addr) -> Result<u32, ()> {
