@@ -3,68 +3,8 @@ use colored::*;
 // cpu.rs
 use crate::bus::Bus;
 
+use crate::constants::*;
 
-/********* Opcode Formats *********/
-const R_FORMAT :u32           = 0b0110011;
-const I_COMP_FORMAT :u32      = 0b0010011;
-const I_LOAD_FORMAT :u32      = 0b0000011;
-const I_JALR_FORMAT :u32      = 0b1100111;
-const I_ENV_FORMAT :u32       = 0b1110011;
-const S_FORMAT :u32           = 0b0100011;
-const B_FORMAT :u32           = 0b1100011;
-const J_FORMAT :u32           = 0b1101111;
-const U_FORMAT_LUI :u32       = 0b0110111;   // U-format
-const U_FORMAT_AUIPC :u32     = 0b0010111; // U-format
-
-
-/************ Funct3 *************/
-/*********** R-format ************/
-const FUNCT3_ADD_SUB :u32     = 0b000;
-const FUNCT3_XOR :u32         = 0b100;
-const FUNCT3_OR :u32          = 0b110;
-const FUNCT3_AND :u32         = 0b111;
-const FUNCT3_SLL :u32         = 0b001;
-const FUNCT3_SRL :u32         = 0b101;
-const FUNCT3_SLT :u32         = 0b010;
-const FUNCT3_SLTU :u32        = 0b011;
-/********* I-COMP-format *********/
-const FUNCT3_ADDI :u32        = 0b000;
-const FUNCT3_XORI :u32        = 0b100;
-const FUNCT3_ORI :u32         = 0b110;
-const FUNCT3_ANDI :u32        = 0b111;
-const FUNCT3_SLLI :u32        = 0b001;
-const FUNCT3_SRLI :u32        = 0b101;
-const FUNCT3_SLTI :u32        = 0b010;
-const FUNCT3_SLTIU :u32       = 0b011;
-/********* I-LOAD-format *********/
-const FUNCT3_LB :u32          = 0b000;
-const FUNCT3_LH :u32          = 0b001;
-const FUNCT3_LW :u32          = 0b010;
-const FUNCT3_LBU :u32         = 0b100;
-const FUNCT3_LHU :u32         = 0b101;
-/*********** S-format ************/
-const FUNCT3_SB :u32          = 0b000;
-const FUNCT3_SH :u32          = 0b001;
-const FUNCT3_SW :u32          = 0b010;
-/*********** B-format ************/
-const FUNCT3_BEQ :u32         = 0b000;
-const FUNCT3_BNE :u32         = 0b001;
-const FUNCT3_BLT :u32         = 0b100;
-const FUNCT3_BGE :u32         = 0b101;
-const FUNCT3_BLTU :u32        = 0b110;
-const FUNCT3_BGEU :u32        = 0b111;
-
-/******* Funct7, R-format ********/
-const FUNCT7_ADD :u32 = 0x00;
-const FUNCT7_SRL :u32 = 0x00;
-
-// Register names mapping
-const REGISTER_NAMES: [&str; 32] = [
-    "zero", "ra",  "sp",  "gp",  "tp",  "t0", "t1", "t2",
-    "s0",   "s1",  "a0",  "a1",  "a2",  "a3", "a4", "a5",
-    "a6",   "a7",  "s2",  "s3",  "s4",  "s5", "s6", "s7",
-    "s8",   "s9",  "s10", "s11", "t3",  "t4", "t5", "t6"
-];
 pub struct Cpu {
     regs: [u32; 32],
     pc: u32,

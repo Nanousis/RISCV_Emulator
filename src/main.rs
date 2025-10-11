@@ -1,13 +1,18 @@
-use std::fs;
+use std::{fs};
 
 mod bus;
 mod peripherals;
 mod cpu;
+mod constants;
+mod types;
 
 use peripherals::{Ram, UartNs16550a, TextMode};
+use peripherals::ScreenHandle;
 use bus::Bus;
 use cpu::Cpu;
-use crate::bus::Device;
+use constants::*;
+use types::{Ctrl, CtrlMessage, ScreenMsg, ScreenType};
+use crate::{bus::Device, peripherals::{ScreenCsr}};
 use std::time::Instant;
 use std::io;
 use clap::{ArgAction, Parser};
@@ -19,13 +24,6 @@ use eframe::egui::{self};
 mod gui_app;
 use gui_app::GUIApp;
 
-// Register names mapping
-const REGISTER_NAMES: [&str; 32] = [
-    "zero", "ra",  "sp",  "gp",  "tp",  "t0", "t1", "t2",
-    "s0",   "s1",  "a0",  "a1",  "a2",  "a3", "a4", "a5",
-    "a6",   "a7",  "s2",  "s3",  "s4",  "s5", "s6", "s7",
-    "s8",   "s9",  "s10", "s11", "t3",  "t4", "t5", "t6"
-];
 #[derive(Parser, Debug)]
 #[command(name = "RISC-V Emulator", version, about = "A simple RISC-V emulator in Rust", long_about = None)]
 struct Args {
@@ -51,16 +49,9 @@ fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error
     Ok(nums)
 }
 
-struct CtrlMessage {
-    command: Ctrl,
-    data: Vec<u8>,
-}
-enum Ctrl {
-    Data,
-    Stop,
-}
 
-fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
+
+fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mpsc::Receiver<CtrlMessage>, screen_tx: mpsc::Sender<ScreenMsg>) {
     // std::thread::sleep(std::time::Duration::from_secs(2));
     let start = Instant::now();
     let verbose = args.verbose > 0;
@@ -83,15 +74,38 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, rx: &mpsc::Receiver<CtrlMessage>) {
                 break;
             }
         }
+        cpu.tick(verbose, _batch);
         if let Ok(msg) = rx.try_recv() {
             match msg.command {
-                Ctrl::Data => {
-                    unimplemented!();
+                Ctrl::RequestFrame => {
+                    let frame_buff_enabled = cpu.read_mem(4, SCREEN_CSR_ENABLE) & 1 == 1;
+                    let frame_buff_addr = cpu.read_mem(4, SCREEN_CSR_ADDR + 4);
+                    // println!("Received frame request enabled:{} addr:0x{:08X}", frame_buff_enabled, frame_buff_addr);
+                    if !frame_buff_enabled{
+                        //fucking kill me.
+                        println!("Text Mode Addr: 0x{:08X}", VGA_TEXT_MODE_BASE);
+                        if let Ok(buf) = textmode_frame.read() {
+                            screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone() }).ok();
+                        }
+                    }
+                    else{
+                        // println!("Frame Buffer Addr: 0x{:08X}", frame_buff_addr);
+                        let frame_size = SCREEN_WIDTH * SCREEN_HEIGHT * 2;
+                        let mut frame_buff = vec![255; frame_size];
+                        for i in 0..(frame_size/4) {
+                            let data = cpu.read_mem(4, frame_buff_addr + (i*4) as u32);
+                            let bytes = data.to_le_bytes();
+                            frame_buff[i*4    ] = bytes[0];
+                            frame_buff[i*4 + 1] = bytes[1];
+                            frame_buff[i*4 + 2] = bytes[2];
+                            frame_buff[i*4 + 3] = bytes[3];
+                        }
+                        let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff } );
+                    }
                 }
                 Ctrl::Stop => break,
             }
         }
-        cpu.tick(verbose, _batch);
     }
     if verbose {
         for (i, &name) in REGISTER_NAMES.iter().enumerate() {
@@ -113,25 +127,30 @@ fn main() -> eframe::Result {
     
     // Initiate the thread communication channels
     let (ctrl_tx, ctrl_rx) = mpsc::channel::<CtrlMessage>();
-    let (mem_tx, mem_rx) = mpsc::channel::<CtrlMessage>();
+    let (screen_tx, screen_rx) = mpsc::channel::<ScreenMsg>();
     let (uart_tx, uart_rx) = mpsc::channel::<char>();
     
     // Cpu and bus initialization.
     let mut bus = Bus::new();
+
+    let screen_csr = ScreenCsr::new();
+
+    // SOMEHOW give it the screen csr struct
     let mut ram = Ram::new(1024 * 4096); // 4MB RAM
     for (i, &value) in ram_init.iter().enumerate() {
         ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
     }
-    let vga_text_mode = TextMode::new(mem_tx);
-
-    bus.add_region(0x1000_0000, 0x0000_000F, Box::new(UartNs16550a::new(uart_tx)));
-    bus.add_region(0x8000_0000, ram.size(), Box::new(ram));
-    bus.add_region(0x8800_0000, 1216*2, Box::new(vga_text_mode));
+    let vga_text_mode = TextMode::new();
+    let textmode_frame = vga_text_mode.handle();
+    bus.add_region(SCREEN_CSR_ADDR, 8, Box::new(screen_csr));
+    bus.add_region(UART0_BASE, 0x0000_000F, Box::new(UartNs16550a::new(uart_tx)));
+    bus.add_region(RAM_BASE, ram.size(), Box::new(ram));
+    bus.add_region(VGA_TEXT_MODE_BASE, 1216*2, Box::new(vga_text_mode));
     let mut cpu = Cpu::new(bus, 0x8000_0000);
     
 
     let thread_handle = thread::spawn(move || {
-        cpu_thread(&mut cpu, &args,&ctrl_rx);
+        cpu_thread(&mut cpu, &args, textmode_frame, &ctrl_rx, screen_tx);
     });
     
     // can use try receive to not block
@@ -146,7 +165,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |_cc| {
             let mut app = GUIApp::default();
-            app.mem_rx = Some(mem_rx);
+            app.screen_rx = Some(screen_rx);
             app.ctrl_tx = Some(ctrl_tx.clone());
             app.uart_rx = Some(uart_rx);
             Ok(Box::new(app))

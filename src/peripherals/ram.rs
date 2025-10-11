@@ -1,11 +1,15 @@
-use crate::bus::{Addr, Device};
+use crate::{bus::{Addr, Device}};
 
 pub struct Ram {
+    // addr: Addr,
     size: u32,
     data: Vec<u8>,
+    // screen_csr: Arc<ScreenCSRShared>,
+    // pub screen_tx: mpsc::Sender<ScreenMsg>,
+
 }
 impl Ram {
-    pub fn new(size: usize) -> Self {
+    pub fn new( size: usize) -> Self {
         println!("Initialized {} bytes in ram", size);
         Self {
             size: size as u32,
