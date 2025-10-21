@@ -4,6 +4,7 @@ use colored::*;
 use crate::bus::Bus;
 
 use crate::constants::*;
+use crate::types::*;
 
 pub struct Cpu {
     regs: [u32; 32],
@@ -11,6 +12,7 @@ pub struct Cpu {
     bus: Bus,
     cycles: u64,
 }
+
 
 
 const OPCODE_MASK: u32 = 0x7F;
@@ -54,7 +56,13 @@ impl Cpu {
         (((value << shift) as i32) >> shift) as u32
     }
 
-    pub fn tick(&mut self, verbose: bool, batch: u64) {
+    pub fn tick(&mut self, verbose: bool, batch: u64, instr_log: bool) -> Vec<Event>{
+        let mut event_log: Vec<Event> = if instr_log{
+            Vec::with_capacity(batch as usize)
+        }
+        else{
+            Vec::new()
+        };
         for _ in 0..batch {
             assert!(
                 self.pc.is_multiple_of(4),
@@ -76,59 +84,67 @@ impl Cpu {
             let rs2 = (instruction >> 20) & 0x1F;
             let funct7 = (instruction >> 25) & 0x7F;
 
-            let mnemonic: String;
+            // let mut mnemonic: String = String::from("UNKNOWN");
             let mut pc_changed = false;
             match _opcode {
                 R_FORMAT => {
+
                     match funct3 {
                         FUNCT3_ADD_SUB => {
                             if funct7 == FUNCT7_ADD {
-                                mnemonic = format!("add {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                                // mnemonic = format!("add {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
                                 self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_add(self.read_reg(rs2 as usize));
                             } else {
-                                mnemonic = format!("sub {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                                // if verbose {mnemonic = format!("sub {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                                 self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_sub(self.read_reg(rs2 as usize));
                             }
                         }
                         FUNCT3_XOR => {
-                            mnemonic = format!("xor {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("xor {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             self.regs[_rd as usize] = self.read_reg(rs1 as usize) ^ self.read_reg(rs2 as usize);
                         }
                         FUNCT3_OR => {
-                            mnemonic = format!("or {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("or {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             self.regs[_rd as usize] = self.read_reg(rs1 as usize) | self.read_reg(rs2 as usize);
                         }
                         FUNCT3_AND => {
-                            mnemonic = format!("and {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("and {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             self.regs[_rd as usize] = self.read_reg(rs1 as usize) & self.read_reg(rs2 as usize);
                         }
                         FUNCT3_SLL => {
-                            mnemonic = format!("sll {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("sll {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             let shamt = self.read_reg(rs2 as usize) & 0x1F;
                             self.regs[_rd as usize] = self.read_reg(rs1 as usize) << shamt;
                         }
                         FUNCT3_SRL => {
                             if funct7 == FUNCT7_SRL {
-                                mnemonic = format!("srl {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                                // if verbose {mnemonic = format!("srl {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                                 let shamt = self.read_reg(rs2 as usize) & 0x1F;
                                 self.regs[_rd as usize] = self.read_reg(rs1 as usize) >> shamt;
                             } else {
-                                mnemonic = format!("sra {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                                // if verbose {mnemonic = format!("sra {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                                 let shamt = self.read_reg(rs2 as usize) & 0x1F;
                                 self.regs[_rd as usize] = ((self.read_reg(rs1 as usize) as i32) >> shamt) as u32;
                             }
                         }
                         FUNCT3_SLT => {
-                            mnemonic = format!("slt {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("slt {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             self.regs[_rd as usize] = if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) { 1 } else { 0 };
                         }
                         FUNCT3_SLTU => {
-                            mnemonic = format!("sltu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                            // if verbose {mnemonic = format!("sltu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
                             self.regs[_rd as usize] = if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) { 1 } else { 0 };
                         }
                         _ => {
                             panic!("Unknown funct3 in R-format: 0b{:03b}", funct3);
                         }
+                    }
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::RegWrite{reg: _rd as u8, value: self.regs[_rd as usize]},
+                    });
                     }
                 }
                 I_COMP_FORMAT => {
@@ -137,123 +153,126 @@ impl Cpu {
                         FUNCT3_ADDI => {
                             let temp = self.read_reg(rs1 as usize).wrapping_add(imm);
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("addi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("addi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         FUNCT3_XORI => {
                             let temp = self.read_reg(rs1 as usize) ^ imm;
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("xori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("xori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         FUNCT3_ORI => {
                             let temp = self.read_reg(rs1 as usize) | imm;
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("ori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("ori {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         FUNCT3_ANDI => {
                             let temp = self.read_reg(rs1 as usize) & imm;
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("andi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("andi {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         FUNCT3_SLLI => {
                             let shamt = (instruction >> 20) & 0x1F;
                             let temp = self.read_reg(rs1 as usize) << shamt;
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("slli {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);
+                            // if verbose {mnemonic = format!("slli {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);}
                         }
                         FUNCT3_SRLI => {
                             if funct7 == 0x00 {
                                 let shamt = (instruction >> 20) & 0x1F;
                                 let temp = self.read_reg(rs1 as usize) >> shamt;
                                 self.write_reg(_rd as usize, temp);
-                                mnemonic = format!("srli {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);
+                                // if verbose {mnemonic = format!("srli {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);}
                             } else {
                                 let shamt = (instruction >> 20) & 0x1F;
                                 let temp = ((self.read_reg(rs1 as usize) as i32) >> shamt) as u32;
                                 self.write_reg(_rd as usize, temp);
-                                mnemonic = format!("srai {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);
+                                // if verbose {mnemonic = format!("srai {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], shamt);}
                             }
                         }
                         FUNCT3_SLTI => {
                             let imm = ((instruction as i32) >> 20) as u32; // sign-extend
                             let temp = if (self.read_reg(rs1 as usize) as i32) < (imm as i32) { 1 } else { 0 };
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("slti {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("slti {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         FUNCT3_SLTIU => {
                             let imm = ((instruction as i32) >> 20) as u32; // sign-extend
                             let temp = if self.read_reg(rs1 as usize) < imm { 1 } else { 0 };
                             self.write_reg(_rd as usize, temp);
-                            mnemonic = format!("sltiu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);
+                            // if verbose {mnemonic = format!("sltiu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], imm as i32);}
                         }
                         _ => {
                             panic!("Unknown funct3 in I-COMP-format: 0b{:03b}", funct3);
                         }
                     }
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::RegWrite{reg: _rd as u8, value: self.regs[_rd as usize]},
+                    });
+                    }
                 }
                 I_LOAD_FORMAT => {
                     let imm = self.sign_extend((instruction >> 20) & 0xFFF, 12);
+                    let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                     match funct3 {
                         FUNCT3_LB => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
-                            mnemonic = format!("lb {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("lb {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.read(1, addr) {
                                 Ok(byte) => {
                                     let temp = ((byte as i8) as i32) as u32; // sign-extend
                                     self.write_reg(_rd as usize, temp);
                                 },
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_LH => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
-                            mnemonic = format!("lh {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("lh {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.read(2, addr) {
                                 Ok(halfword) => {
                                     let temp = ((halfword as i16) as i32) as u32; // sign-extend
                                     self.write_reg(_rd as usize, temp);
                                 },
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_LW => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
-                            mnemonic = format!("lw {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("lw {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.read(4, addr) {
                                 Ok(word) => {
                                     self.write_reg(_rd as usize, word);
                                 },
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_LBU => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
-                            mnemonic = format!("lbu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("lbu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.read(1, addr) {
                                 Ok(byte) => {
                                     let temp = byte; // zero-extend
                                     self.write_reg(_rd as usize, temp);
                                 },
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_LHU => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
-                            mnemonic = format!("lhu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("lhu {}, {}({})", REGISTER_NAMES[_rd as usize],  imm as i32, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.read(2, addr) {
                                 Ok(halfword) => {
                                     let temp = halfword; // zero-extend
                                     self.write_reg(_rd as usize, temp);
                                 },
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory read error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
@@ -261,48 +280,60 @@ impl Cpu {
                             panic!("Unknown funct3 in I-LOAD-format: 0b{:03b}", funct3);
                         }
                     }
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::MemRead { addr: addr, value: self.regs[_rd as usize]}
+                    });
+                    }
                 }
                 S_FORMAT => {
                     let imm_4_0 = (instruction >> 7) & 0x1F;
                     let imm_11_5 = (instruction >> 25) & 0x7F;
                     let imm = self.sign_extend((imm_11_5 << 5) | imm_4_0, 12);
+                    let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                     match funct3 {
                         FUNCT3_SB => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                             let value = self.read_reg(rs2 as usize) & 0xFF;
-                            mnemonic = format!("sb {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("sb {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.write(1, addr, value) {
                                 Ok(_) => {},
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_SH => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                             let value = self.read_reg(rs2 as usize) & 0xFFFF;
-                            mnemonic = format!("sh {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("sh {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.write(2, addr, value) {
                                 Ok(_) => {},
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         FUNCT3_SW => {
-                            let addr = self.read_reg(rs1 as usize).wrapping_add(imm);
                             let value = self.read_reg(rs2 as usize);
-                            mnemonic = format!("sw {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);
+                            // if verbose {mnemonic = format!("sw {}, {}({})", REGISTER_NAMES[rs2 as usize], imm, REGISTER_NAMES[rs1 as usize]);}
                             match self.bus.write(4, addr, value) {
                                 Ok(_) => {},
                                 Err(_) => {
-                                    panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
+                                    // panic!("Cycle: {} Memory write error at address: 0x{:08X} from {}", self.cycles, addr, mnemonic.bold().underline());
                                 }
                             }
                         }
                         _ => {
                             panic!("Unknown funct3 in S-format: 0b{:03b}", funct3);
                         }
+                    }
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::MemWrite { addr: addr, value: self.read_reg(rs2 as usize) }
+                    });
                     }
                 }
                 B_FORMAT => {
@@ -315,7 +346,7 @@ impl Cpu {
                     match funct3 {
                         FUNCT3_BEQ => {
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("beq {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("beq {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) == self.read_reg(rs2 as usize) {
                                 self.pc = address;
                             } else {
@@ -324,7 +355,7 @@ impl Cpu {
                         }
                         FUNCT3_BNE => {
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("bne {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("bne {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) != self.read_reg(rs2 as usize) {
                                 self.pc = address;
                             } else {
@@ -333,7 +364,7 @@ impl Cpu {
                         }
                         FUNCT3_BLT =>{
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("blt {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("blt {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) {
                                 self.pc = address;
                             } else {
@@ -342,7 +373,7 @@ impl Cpu {
                         }
                         FUNCT3_BGE =>{
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("bge {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("bge {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if (self.read_reg(rs1 as usize) as i32) >= (self.read_reg(rs2 as usize) as i32) {
                                 self.pc = address;
                             } else {
@@ -351,7 +382,7 @@ impl Cpu {
                         }
                         FUNCT3_BLTU =>{
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("bltu {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("bltu {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) {
                                 self.pc = address;
                             } else {
@@ -360,7 +391,7 @@ impl Cpu {
                         }
                         FUNCT3_BGEU =>{
                             let address = self.pc.wrapping_add(imm);
-                            mnemonic = format!("bgeu {} , {}, to 0x{:08X}", rs1, rs2, address);
+                            // if verbose {mnemonic = format!("bgeu {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) >= self.read_reg(rs2 as usize) {
                                 self.pc = address;
                             } else {
@@ -371,17 +402,40 @@ impl Cpu {
                             panic!("Unknown funct3 in B-format: 0b{:03b}", funct3);
                         }
                     }
+                    if pc_changed {
+                        if instr_log {
+                        event_log.push(Event {
+                            pc: self.pc,
+                            opcode: instruction,
+                            instr_type: EventType::FlowChange{new_pc: self.pc},
+                        });
+                        }
+                    }
                 }
                 U_FORMAT_LUI => {
-                    mnemonic = "lui".to_string();
+                    // if verbose {mnemonic = "lui".to_string();}
                     let imm = instruction & 0xFFFFF000;
                     self.write_reg(_rd as usize, imm);
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::RegWrite{reg: _rd as u8, value: self.regs[_rd as usize]},
+                    });
+                    }
                 }
                 U_FORMAT_AUIPC => {
-                    mnemonic = "auipc".to_string();
+                    // if verbose {mnemonic = "auipc".to_string();}
                     let imm = instruction & 0xFFFFF000;
                     let temp = self.pc.wrapping_add(imm);
                     self.write_reg(_rd as usize, temp);
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::RegWrite{reg: _rd as u8, value: self.regs[_rd as usize]},
+                    });
+                    }
                 }
                 J_FORMAT => {
                     pc_changed = true;
@@ -393,22 +447,36 @@ impl Cpu {
                     let addr = self.pc.wrapping_add(imm);
                     self.write_reg(_rd as usize, self.pc.wrapping_add(4));
                     self.pc = addr;
-                    mnemonic = format!("jal to 0x{addr:08X}");
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
+                    });
+                    }
+                    // if verbose {mnemonic = format!("jal to 0x{addr:08X}");}
                 }
                 I_JALR_FORMAT => {
                     pc_changed = true;
-                    mnemonic = "jalr".to_string();
+                    // if verbose {mnemonic = "jalr".to_string();}
                     let imm = self.sign_extend((instruction >> 20) & 0xFFF, 12);
                     let addr = self.read_reg(rs1 as usize).wrapping_add(imm) & !1;
                     self.write_reg(_rd as usize, self.pc.wrapping_add(4));
                     self.pc = addr;
+                    if instr_log {
+                    event_log.push(Event {
+                        pc: self.pc,
+                        opcode: instruction,
+                        instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
+                    });
+                    }
                 }
                 I_ENV_FORMAT => {
-                    // mnemonic = "ecall/ebreak".to_string();
+                    // if verbose {mnemonic = "ecall/ebreak".to_string();}
                     unimplemented!("ECALL/EBREAK not implemented");
                 }
                 0x0 => {
-                    mnemonic = "NOP".to_string();
+                    // if verbose {mnemonic = "NOP".to_string();}
                     // Do nothing
                 }
                 _ => {
@@ -416,12 +484,34 @@ impl Cpu {
                 }
             }
             if verbose {
-                println!("{}: {} (0x{:08X}) pc: 0x{:08X}", self.cycles, mnemonic.to_string().bold().underline(), instruction, self.pc);
+                // println!("{}: {} (0x{:08X}) pc: 0x{:08X}", self.cycles, mnemonic.to_string().bold().underline(), instruction, self.pc);
             }
             if !pc_changed {
                 self.pc += 4;
             }
             self.cycles += 1;
+		// 	if(MEMWB_PC!=32'hffffffff && write_memwb && MEMWB_PC>=32'h80000000)begin
+		// 	if(written)begin
+		// 		$fwrite(log, ",\n");
+		// 	end
+		// 	$fwrite(log, "{\"pc\": %d, \"instr\": %d, ", MEMWB_PC, MEMWB_instr);
+		// 	if(MEMWB_MemWrite)begin
+		// 		$fwrite(log, "\"event_t\": \"%s\", \"mem_addr\": %d, \"mem_val\": %d, ", "MEMORY_WRITE", MEMWB_MemAddr, MEMWB_MemWriteData);
+		// 	end
+		// 	else if(MEMWB_MemToReg)begin
+		// 		$fwrite(log, "\"event_t\": \"%s\", \"mem_addr\": %d, \"mem_val\": %d, ", "MEMORY_READ", MEMWB_MemAddr, MEMWB_DMemOut);
+		// 	end
+		// 	else if(MEMWB_RegWrite)begin
+		// 		$fwrite(log, "\"event_t\": \"%s\", \"reg_changed\": %d, \"reg_val\": %d, ", "REGISTER_WRITE", MEMWB_RegWriteAddr, wRegData);
+		// 	end
+		// 	else begin
+		// 		$fwrite(log, "\"event_t\": \"%s\", \"new_pc\": %d, ", "FLOW_CHANGE", MEMWB_PC);
+		// 	end
+		// 	$fwrite(log, "\"status\": {\"decode\": %d, \"rename\": %d, \"issue\": %d, \"dispatch\": %d, \"resolve\": %d, \"commit\": %d}}", MEMWB_decode_time, 
+		// 		MEMWB_decode_time, MEMWB_issue_time, MEMWB_dispatch_time, MEMWB_resolve_time, MEMWB_commit_time);
+		// 	written <= 1;
+		// end
         }
+        event_log
     }
 }

@@ -20,6 +20,8 @@ use clap::{ArgAction, Parser};
 use std::sync::mpsc;
 use std::thread;
 use eframe::egui::{self};
+use std::fs::File;
+use std::io::{BufWriter, Write};
 
 mod gui_app;
 use gui_app::GUIApp;
@@ -34,6 +36,10 @@ struct Args {
 
     #[arg(short, long, default_value_t = 0)]
     limit : u64,
+    /// Log instructions to a file
+    /// Log instructions to a file
+    #[arg(long, default_value = None)]
+    log: Option<String>,
 }
 fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(file_path)?;
@@ -63,6 +69,13 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
         println!("Running for {} cycles.", limit);
     }
     println!("------------\n");
+    let logging_enabled = args.log.is_some();
+    let mut writer = None;
+    if logging_enabled {
+        let file = File::create(args.log.as_ref().unwrap()).expect("Unable to create log file");
+        writer = Some(BufWriter::with_capacity(64 * 1024, file));
+        write!(writer.as_mut().unwrap(), "Emulation Trace  ").expect("Failed to write header");
+    }
     let _batch = if verbose { 1 } else { 1000 };
     for _ in 0..(limit/_batch) {
         let mut input = String::new();
@@ -74,7 +87,13 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                 break;
             }
         }
-        cpu.tick(verbose, _batch);
+        let event_log = cpu.tick(verbose, _batch, logging_enabled);
+        if logging_enabled{
+
+            for event in event_log {
+                event.serialize(writer.as_mut().unwrap()).expect("Failed to write event");
+            }
+        }
         if let Ok(msg) = rx.try_recv() {
             match msg.command {
                 Ctrl::RequestFrame => {
@@ -83,7 +102,6 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                     // println!("Received frame request enabled:{} addr:0x{:08X}", frame_buff_enabled, frame_buff_addr);
                     if !frame_buff_enabled{
                         //fucking kill me.
-                        println!("Text Mode Addr: 0x{:08X}", VGA_TEXT_MODE_BASE);
                         if let Ok(buf) = textmode_frame.read() {
                             screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone() }).ok();
                         }
@@ -116,6 +134,36 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
     let duration = start.elapsed();
     println!("\n------------");
     println!("CPU execution time: {:?}", duration);
+    if let Ok(msg) = rx.recv() {
+        match msg.command {
+            Ctrl::RequestFrame => {
+                let frame_buff_enabled = cpu.read_mem(4, SCREEN_CSR_ENABLE) & 1 == 1;
+                let frame_buff_addr = cpu.read_mem(4, SCREEN_CSR_ADDR + 4);
+                // println!("Received frame request enabled:{} addr:0x{:08X}", frame_buff_enabled, frame_buff_addr);
+                if !frame_buff_enabled{
+                    //fucking kill me.
+                    if let Ok(buf) = textmode_frame.read() {
+                        screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone() }).ok();
+                    }
+                }
+                else{
+                    // println!("Frame Buffer Addr: 0x{:08X}", frame_buff_addr);
+                    let frame_size = SCREEN_WIDTH * SCREEN_HEIGHT * 2;
+                    let mut frame_buff = vec![255; frame_size];
+                    for i in 0..(frame_size/4) {
+                        let data = cpu.read_mem(4, frame_buff_addr + (i*4) as u32);
+                        let bytes = data.to_le_bytes();
+                        frame_buff[i*4    ] = bytes[0];
+                        frame_buff[i*4 + 1] = bytes[1];
+                        frame_buff[i*4 + 2] = bytes[2];
+                        frame_buff[i*4 + 3] = bytes[3];
+                    }
+                    let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff } );
+                }
+            }
+            Ctrl::Stop => println!("CPU thread stopping."),
+        }
+    }
 }
 
 fn main() -> eframe::Result {
