@@ -21,7 +21,7 @@ use std::sync::mpsc;
 use std::thread;
 use eframe::egui::{self};
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter};
 
 mod gui_app;
 use gui_app::GUIApp;
@@ -74,7 +74,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
     if logging_enabled {
         let file = File::create(args.log.as_ref().unwrap()).expect("Unable to create log file");
         writer = Some(BufWriter::with_capacity(64 * 1024, file));
-        write!(writer.as_mut().unwrap(), "Emulation Trace  ").expect("Failed to write header");
+        // write!(writer.as_mut().unwrap(), "Emulation Trace\n").expect("Failed to write header");
     }
     let _batch = if verbose { 1 } else { 1000 };
     for _ in 0..(limit/_batch) {

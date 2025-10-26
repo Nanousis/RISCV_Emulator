@@ -14,7 +14,7 @@ impl Device for UartNs16550a {
     fn read(&mut self, _size: u8, _addr: Addr) -> u32 {
         // Default value for always ready. 
         // TODO: implement proper UART behavior
-        0x20
+        0x60
     }
 
     fn write(&mut self, size: u8, addr: Addr, value: u32) -> Result<(), ()> {

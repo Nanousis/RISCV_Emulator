@@ -22,6 +22,7 @@ pub enum EventType{
     MemRead{addr: u32, value: u32},
     MemWrite{addr: u32, value: u32},
     FlowChange{new_pc: u32},
+    #[allow(dead_code)]
     FlowLink{new_pc: u32, register: u8},
 }
 

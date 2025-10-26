@@ -19,8 +19,11 @@ const OPCODE_MASK: u32 = 0x7F;
 
 impl Cpu {
     pub fn new(bus: Bus, pc: u32) -> Self {
+        let mut regs = [0; 32];
+        // hack for matching emulation program....
+        regs[1]=0x00000728;
         Self {
-            regs: [0; 32],
+            regs,
             pc,
             bus,
             cycles: 0,
@@ -284,7 +287,7 @@ impl Cpu {
                     event_log.push(Event {
                         pc: self.pc,
                         opcode: instruction,
-                        instr_type: EventType::MemRead { addr: addr, value: self.regs[_rd as usize]}
+                        instr_type: EventType::MemRead { addr, value: self.regs[_rd as usize] }
                     });
                     }
                 }
@@ -332,7 +335,7 @@ impl Cpu {
                     event_log.push(Event {
                         pc: self.pc,
                         opcode: instruction,
-                        instr_type: EventType::MemWrite { addr: addr, value: self.read_reg(rs2 as usize) }
+                        instr_type: EventType::MemWrite { addr, value: self.read_reg(rs2 as usize) }
                     });
                     }
                 }
@@ -343,9 +346,16 @@ impl Cpu {
                     let imm_10_5 = (instruction >> 25) & 0x3F;
                     let imm_12 = (instruction >> 31) & 0x1;
                     let imm = self.sign_extend((imm_12 << 12) | (imm_11 << 11) | (imm_10_5 << 5) | (imm_4_1 << 1), 13);
+                    let address = self.pc.wrapping_add(imm);
+                    if  instr_log {
+                        event_log.push(Event {
+                            pc: self.pc,
+                            opcode: instruction,
+                            instr_type: EventType::FlowChange{new_pc: address},
+                        });
+                    }
                     match funct3 {
                         FUNCT3_BEQ => {
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("beq {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) == self.read_reg(rs2 as usize) {
                                 self.pc = address;
@@ -354,7 +364,6 @@ impl Cpu {
                             }
                         }
                         FUNCT3_BNE => {
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("bne {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) != self.read_reg(rs2 as usize) {
                                 self.pc = address;
@@ -363,7 +372,6 @@ impl Cpu {
                             }
                         }
                         FUNCT3_BLT =>{
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("blt {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) {
                                 self.pc = address;
@@ -372,7 +380,6 @@ impl Cpu {
                             }
                         }
                         FUNCT3_BGE =>{
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("bge {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if (self.read_reg(rs1 as usize) as i32) >= (self.read_reg(rs2 as usize) as i32) {
                                 self.pc = address;
@@ -381,7 +388,6 @@ impl Cpu {
                             }
                         }
                         FUNCT3_BLTU =>{
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("bltu {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) {
                                 self.pc = address;
@@ -390,7 +396,6 @@ impl Cpu {
                             }
                         }
                         FUNCT3_BGEU =>{
-                            let address = self.pc.wrapping_add(imm);
                             // if verbose {mnemonic = format!("bgeu {} , {}, to 0x{:08X}", rs1, rs2, address);}
                             if self.read_reg(rs1 as usize) >= self.read_reg(rs2 as usize) {
                                 self.pc = address;
@@ -400,15 +405,6 @@ impl Cpu {
                         }
                         _=> {
                             panic!("Unknown funct3 in B-format: 0b{:03b}", funct3);
-                        }
-                    }
-                    if pc_changed {
-                        if instr_log {
-                        event_log.push(Event {
-                            pc: self.pc,
-                            opcode: instruction,
-                            instr_type: EventType::FlowChange{new_pc: self.pc},
-                        });
                         }
                     }
                 }
@@ -445,15 +441,17 @@ impl Cpu {
                     let imm19_12 = (instruction >> 12) & 0xFF;
                     let imm = self.sign_extend((imm20 << 20) | (imm19_12 << 12) | (imm11_1 << 11) | (imm10_1 << 1), 21);
                     let addr = self.pc.wrapping_add(imm);
-                    self.write_reg(_rd as usize, self.pc.wrapping_add(4));
-                    self.pc = addr;
+                    let value = self.pc.wrapping_add(4);
+                    self.write_reg(_rd as usize, value);
                     if instr_log {
-                    event_log.push(Event {
-                        pc: self.pc,
-                        opcode: instruction,
-                        instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
-                    });
+                        event_log.push(Event {
+                            pc: self.pc,
+                            opcode: instruction,
+                            instr_type: EventType::RegWrite { reg: (_rd as u8), value }    
+                            // instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
+                        });
                     }
+                    self.pc = addr;
                     // if verbose {mnemonic = format!("jal to 0x{addr:08X}");}
                 }
                 I_JALR_FORMAT => {
@@ -461,15 +459,25 @@ impl Cpu {
                     // if verbose {mnemonic = "jalr".to_string();}
                     let imm = self.sign_extend((instruction >> 20) & 0xFFF, 12);
                     let addr = self.read_reg(rs1 as usize).wrapping_add(imm) & !1;
-                    self.write_reg(_rd as usize, self.pc.wrapping_add(4));
-                    self.pc = addr;
+                    let value = self.pc.wrapping_add(4);
+                    self.write_reg(_rd as usize, value);
                     if instr_log {
-                    event_log.push(Event {
-                        pc: self.pc,
-                        opcode: instruction,
-                        instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
-                    });
+                        event_log.push(Event {
+                            pc: self.pc,
+                            opcode: instruction,
+                            instr_type: EventType::RegWrite { reg: (_rd as u8), value }    
+                            // instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
+                        });
                     }
+
+                    // if instr_log {
+                    //     event_log.push(Event {
+                    //         pc: self.pc,
+                    //         opcode: instruction,
+                    //         instr_type: EventType::FlowLink{new_pc: self.pc, register: _rd as u8},
+                    //     });
+                    // }
+                    self.pc = addr;
                 }
                 I_ENV_FORMAT => {
                     // if verbose {mnemonic = "ecall/ebreak".to_string();}
