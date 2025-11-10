@@ -33,6 +33,17 @@ pub const FUNCT3_SLL :u32         = 0b001;
 pub const FUNCT3_SRL :u32         = 0b101;
 pub const FUNCT3_SLT :u32         = 0b010;
 pub const FUNCT3_SLTU :u32        = 0b011;
+
+// mul funct3 codes
+pub const FUNCT3_MUL :u32           = 0b0000;
+pub const FUNCT3_MULH :u32          = 0b0001;
+pub const FUNCT3_MULHSU :u32        = 0b0010;
+pub const FUNCT3_MULHU :u32         = 0b0011;
+pub const FUNCT3_DIV :u32           = 0b0100;
+pub const FUNCT3_DIVU :u32          = 0b0101;
+pub const FUNCT3_REM :u32           = 0b0110;
+pub const FUNCT3_REMU :u32          = 0b0111;
+
 /********* I-COMP-format *********/
 pub const FUNCT3_ADDI :u32        = 0b000;
 pub const FUNCT3_XORI :u32        = 0b100;
@@ -63,6 +74,7 @@ pub const FUNCT3_BGEU :u32        = 0b111;
 /******* Funct7, R-format ********/
 pub const FUNCT7_ADD :u32 = 0x00;
 pub const FUNCT7_SRL :u32 = 0x00;
+pub const FUNCT7_MUL_DIV :u32 = 0x01; // M extension funct7 for MUL/DIV
 
 // Register names mapping
 pub const REGISTER_NAMES: [&str; 32] = [
