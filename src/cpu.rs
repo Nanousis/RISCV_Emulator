@@ -91,56 +91,144 @@ impl Cpu {
             let mut pc_changed = false;
             match _opcode {
                 R_FORMAT => {
-
-                    match funct3 {
-                        FUNCT3_ADD_SUB => {
-                            if funct7 == FUNCT7_ADD {
-                                // mnemonic = format!("add {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
-                                self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_add(self.read_reg(rs2 as usize));
+                    // M extension format
+                if funct7 == FUNCT7_MUL_DIV {
+                    let rs1_val = self.read_reg(rs1 as usize);
+                    let rs2_val = self.read_reg(rs2 as usize);
+                    let result = match funct3 {
+                        FUNCT3_MUL => {
+                            // Low 32 bits of signed multiplication
+                            rs1_val.wrapping_mul(rs2_val)
+                        }
+                        FUNCT3_MULH => {
+                            // High 32 bits of signed * signed
+                            let res = (rs1_val as i32 as i64)
+                                .wrapping_mul(rs2_val as i32 as i64);
+                            (res >> 32) as u32
+                        }
+                        FUNCT3_MULHSU => {
+                            // High 32 bits of signed * unsigned
+                            let res = (rs1_val as i32 as i64)
+                                .wrapping_mul(rs2_val as u64 as i64);
+                            (res >> 32) as u32
+                        }
+                        FUNCT3_MULHU => {
+                            // High 32 bits of unsigned * unsigned
+                            let res = (rs1_val as u64)
+                                .wrapping_mul(rs2_val as u64);
+                            (res >> 32) as u32
+                        }
+                        FUNCT3_DIV => {
+                            // Signed division
+                            let dividend = rs1_val as i32;
+                            let divisor = rs2_val as i32;
+                            if divisor == 0 {
+                                // Division by zero: result = -1
+                                u32::MAX
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                // Overflow: MIN / -1 = MIN
+                                dividend as u32
                             } else {
-                                // if verbose {mnemonic = format!("sub {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                                self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_sub(self.read_reg(rs2 as usize));
+                                (dividend.wrapping_div(divisor)) as u32
                             }
                         }
-                        FUNCT3_XOR => {
-                            // if verbose {mnemonic = format!("xor {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            self.regs[_rd as usize] = self.read_reg(rs1 as usize) ^ self.read_reg(rs2 as usize);
-                        }
-                        FUNCT3_OR => {
-                            // if verbose {mnemonic = format!("or {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            self.regs[_rd as usize] = self.read_reg(rs1 as usize) | self.read_reg(rs2 as usize);
-                        }
-                        FUNCT3_AND => {
-                            // if verbose {mnemonic = format!("and {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            self.regs[_rd as usize] = self.read_reg(rs1 as usize) & self.read_reg(rs2 as usize);
-                        }
-                        FUNCT3_SLL => {
-                            // if verbose {mnemonic = format!("sll {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            let shamt = self.read_reg(rs2 as usize) & 0x1F;
-                            self.regs[_rd as usize] = self.read_reg(rs1 as usize) << shamt;
-                        }
-                        FUNCT3_SRL => {
-                            if funct7 == FUNCT7_SRL {
-                                // if verbose {mnemonic = format!("srl {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                                let shamt = self.read_reg(rs2 as usize) & 0x1F;
-                                self.regs[_rd as usize] = self.read_reg(rs1 as usize) >> shamt;
+                        FUNCT3_DIVU => {
+                            // Unsigned division
+                            if rs2_val == 0 {
+                                u32::MAX
                             } else {
-                                // if verbose {mnemonic = format!("sra {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                                let shamt = self.read_reg(rs2 as usize) & 0x1F;
-                                self.regs[_rd as usize] = ((self.read_reg(rs1 as usize) as i32) >> shamt) as u32;
+                                rs1_val.wrapping_div(rs2_val)
                             }
                         }
-                        FUNCT3_SLT => {
-                            // if verbose {mnemonic = format!("slt {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            self.regs[_rd as usize] = if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) { 1 } else { 0 };
+                        FUNCT3_REM => {
+                            // Signed remainder
+                            let dividend = rs1_val as i32;
+                            let divisor = rs2_val as i32;
+                            if divisor == 0 {
+                                dividend as u32
+                            } else if dividend == i32::MIN && divisor == -1 {
+                                0
+                            } else {
+                                (dividend.wrapping_rem(divisor)) as u32
+                            }
                         }
-                        FUNCT3_SLTU => {
-                            // if verbose {mnemonic = format!("sltu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
-                            self.regs[_rd as usize] = if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) { 1 } else { 0 };
+                        FUNCT3_REMU => {
+                            // Unsigned remainder
+                            if rs2_val == 0 {
+                                rs1_val
+                            } else {
+                                rs1_val.wrapping_rem(rs2_val)
+                            }
                         }
                         _ => {
-                            panic!("Unknown funct3 in R-format: 0b{:03b}", funct3);
+                            panic!("Unknown funct3 in M-extension: 0b{:03b}", funct3);
                         }
+                    };
+
+                    self.write_reg(_rd as usize, result);
+
+                    if instr_log {
+                        event_log.push(Event {
+                            pc: self.pc,
+                            opcode: instruction,
+                            instr_type: EventType::RegWrite {
+                                reg: _rd as u8,
+                                value: result,
+                            },
+                        });
+                    }
+                }
+                    else{
+                        match funct3 {
+                            FUNCT3_ADD_SUB => {
+                                if funct7 == FUNCT7_ADD {
+                                    // mnemonic = format!("add {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);
+                                    self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_add(self.read_reg(rs2 as usize));
+                                } else {
+                                    // if verbose {mnemonic = format!("sub {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                    self.regs[_rd as usize] = self.read_reg(rs1 as usize).wrapping_sub(self.read_reg(rs2 as usize));
+                                }
+                            }
+                            FUNCT3_XOR => {
+                                // if verbose {mnemonic = format!("xor {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                self.regs[_rd as usize] = self.read_reg(rs1 as usize) ^ self.read_reg(rs2 as usize);
+                            }
+                            FUNCT3_OR => {
+                                // if verbose {mnemonic = format!("or {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                self.regs[_rd as usize] = self.read_reg(rs1 as usize) | self.read_reg(rs2 as usize);
+                            }
+                            FUNCT3_AND => {
+                                // if verbose {mnemonic = format!("and {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                self.regs[_rd as usize] = self.read_reg(rs1 as usize) & self.read_reg(rs2 as usize);
+                            }
+                            FUNCT3_SLL => {
+                                // if verbose {mnemonic = format!("sll {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                let shamt = self.read_reg(rs2 as usize) & 0x1F;
+                                self.regs[_rd as usize] = self.read_reg(rs1 as usize) << shamt;
+                            }
+                            FUNCT3_SRL => {
+                                if funct7 == FUNCT7_SRL {
+                                    // if verbose {mnemonic = format!("srl {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                    let shamt = self.read_reg(rs2 as usize) & 0x1F;
+                                    self.regs[_rd as usize] = self.read_reg(rs1 as usize) >> shamt;
+                                } else {
+                                    // if verbose {mnemonic = format!("sra {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                    let shamt = self.read_reg(rs2 as usize) & 0x1F;
+                                    self.regs[_rd as usize] = ((self.read_reg(rs1 as usize) as i32) >> shamt) as u32;
+                                }
+                            }
+                            FUNCT3_SLT => {
+                                // if verbose {mnemonic = format!("slt {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                self.regs[_rd as usize] = if (self.read_reg(rs1 as usize) as i32) < (self.read_reg(rs2 as usize) as i32) { 1 } else { 0 };
+                            }
+                            FUNCT3_SLTU => {
+                                // if verbose {mnemonic = format!("sltu {}, {}, {}", REGISTER_NAMES[_rd as usize], REGISTER_NAMES[rs1 as usize], rs2);}
+                                self.regs[_rd as usize] = if self.read_reg(rs1 as usize) < self.read_reg(rs2 as usize) { 1 } else { 0 };
+                            }
+                            _ => {
+                                panic!("Unknown funct3 in R-format: 0b{:03b}", funct3);
+                            }
+                    }
                     }
                     if instr_log {
                     event_log.push(Event {
