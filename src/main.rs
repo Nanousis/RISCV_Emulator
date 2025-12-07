@@ -40,6 +40,9 @@ struct Args {
     /// Log instructions to a file
     #[arg(long, default_value = None)]
     log: Option<String>,
+    /// Flash file path
+    #[arg(short, long, default_value = "flash/merged_programs.bin")]
+    flash_file: String,
 }
 fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(file_path)?;
@@ -52,6 +55,21 @@ fn parse_hex_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error
             u32::from_str_radix(&s_no_underscores, 16).unwrap()
         })
         .collect();
+    Ok(nums)
+}
+
+fn parse_bin_file(file_path: &str) -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+    let bytes = fs::read(file_path)?;
+    let mut nums = Vec::new();
+    
+    for chunk in bytes.chunks(4) {
+        let mut word_bytes = [0u8; 4];
+        for (i, &byte) in chunk.iter().enumerate() {
+            word_bytes[i] = byte;
+        }
+        nums.push(u32::from_le_bytes(word_bytes));
+    }
+    
     Ok(nums)
 }
 
@@ -183,6 +201,11 @@ fn main() -> eframe::Result {
 
     let screen_csr = ScreenCsr::new();
 
+    let flash_file_path = &args.flash_file;
+    let flash_data = parse_bin_file(flash_file_path).expect("Failed to parse flash file");
+    let flash = peripherals::Flash::new( 1024*4096, flash_data.iter().flat_map(|&x| x.to_le_bytes()).collect());
+
+
     // SOMEHOW give it the screen csr struct
     let mut ram = Ram::new(1024 * 4096); // 4MB RAM
     for (i, &value) in ram_init.iter().enumerate() {
@@ -194,6 +217,7 @@ fn main() -> eframe::Result {
     bus.add_region(UART0_BASE, 0x0000_000F, Box::new(UartNs16550a::new(uart_tx)));
     bus.add_region(RAM_BASE, ram.size(), Box::new(ram));
     bus.add_region(VGA_TEXT_MODE_BASE, 1216*2, Box::new(vga_text_mode));
+    bus.add_region(FLASH_BASE, flash.size(), Box::new(flash));
     let mut cpu = Cpu::new(bus, 0x8000_0000);
     
 
