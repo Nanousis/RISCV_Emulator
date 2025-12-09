@@ -96,7 +96,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
         // write!(writer.as_mut().unwrap(), "Emulation Trace\n").expect("Failed to write header");
     }
     let _batch = if verbose { 1 } else { 1000 };
-    for _ in 0..(limit/_batch) {
+    for instr_count in 0..(limit/_batch) {
         // let mut input = String::new();
         // if args.limit == 0 {
         //     io::stdin()
@@ -122,7 +122,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                     if !frame_buff_enabled{
                         //fucking kill me.
                         if let Ok(buf) = textmode_frame.read() {
-                            screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone() }).ok();
+                            screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone(), instr_count: instr_count*_batch}).ok();
                         }
                     }
                     else{
@@ -137,7 +137,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                             frame_buff[i*4 + 2] = bytes[2];
                             frame_buff[i*4 + 3] = bytes[3];
                         }
-                        let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff } );
+                        let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff, instr_count: instr_count*_batch} );
                     }
                 }
                 Ctrl::Stop => break,
@@ -162,7 +162,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                 if !frame_buff_enabled{
                     //fucking kill me.
                     if let Ok(buf) = textmode_frame.read() {
-                        screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone() }).ok();
+                        screen_tx.send(ScreenMsg { screen_type: ScreenType::TextMode, data: buf.clone(), instr_count: 0 }).ok();
                     }
                 }
                 else{
@@ -177,7 +177,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
                         frame_buff[i*4 + 2] = bytes[2];
                         frame_buff[i*4 + 3] = bytes[3];
                     }
-                    let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff } );
+                    let _ = screen_tx.send(ScreenMsg { screen_type: ScreenType::FrameBuffer, data: frame_buff, instr_count: 0 } );
                 }
             }
             Ctrl::Stop => println!("CPU thread stopping."),

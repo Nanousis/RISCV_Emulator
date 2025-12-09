@@ -1,7 +1,6 @@
 use std::sync::mpsc;
 use std::time::Duration;
-use eframe::egui::RichText;
-use eframe::egui::{self, TextureHandle, Color32};
+use eframe::egui::{Align, Layout, RichText, self, TextureHandle, Color32};
 
 use crate::types::{Ctrl, CtrlMessage, ScreenMsg, ScreenType};
 use crate::constants::*;
@@ -13,6 +12,10 @@ pub struct GUIApp {
     pub screen_rx: Option<mpsc::Receiver<ScreenMsg>>,
     pub uart_rx: Option<mpsc::Receiver<char>>,
     pub ctrl_tx: Option<mpsc::Sender<CtrlMessage>>,
+    // Private fields
+    prev_frame_time: std::time::Instant,
+    prev_instr_count: u64,
+    cur_instr_count: u64,
     rgba: Vec<u8>,
     uart_buffer: String,
 }
@@ -22,6 +25,9 @@ impl GUIApp {
             let _ = tx.send(CtrlMessage { command: Ctrl::RequestFrame });
         }
         if let Some(rx) = &self.screen_rx && let Ok(msg) = rx.recv() {
+            //used to calculate MI/s
+            self.prev_instr_count = self.cur_instr_count;
+            self.cur_instr_count = msg.instr_count;
             match msg.screen_type {
                 ScreenType::TextMode => {
                     self.rgba = msg.data.clone();
@@ -79,6 +85,17 @@ impl eframe::App for GUIApp {
         }
         tex.set(img, egui::TextureOptions::NEAREST); // update each frame
 
+        // Calculate MI/s
+        let cur_frame_time = std::time::Instant::now(); 
+        let delta_instr = self.cur_instr_count.saturating_sub(self.prev_instr_count);
+        let delta_time = cur_frame_time.duration_since(self.prev_frame_time);
+        let mips = if delta_time.as_secs_f64() > 0.0 {
+            (delta_instr as f64 / 1_000_000.0) / delta_time.as_secs_f64()
+        } else {
+            0.0
+        };
+        self.prev_frame_time = cur_frame_time;
+
         egui::CentralPanel::default()
             .frame(
                 egui::Frame {
@@ -89,11 +106,22 @@ impl eframe::App for GUIApp {
             .show(ctx, |ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                 ui.image(&*tex);
-                ui.heading(
-                    RichText::new("Uart Log")
-                        .color(Color32::WHITE)
-                        .size(24.0)
-                );
+                ui.add_space(10.0); // 10 px vertical space
+
+                ui.with_layout(Layout::left_to_right(Align::TOP), |ui| {
+                    ui.heading(
+                        RichText::new("Uart Log")
+                            .color(Color32::WHITE)
+                            .size(24.0)
+                    );
+                    ui.with_layout(Layout::right_to_left(Align::TOP), |ui| {
+                        ui.label(
+                            RichText::new(format!("Performance: {:.2} MI/s", mips))
+                                .color(Color32::LIGHT_GREEN)
+                                .size(20.0),
+                        );
+                    });
+                });
                 ui.add_space(10.0); // 10 px vertical space
                 egui::ScrollArea::vertical()
                     .stick_to_bottom(true)
@@ -133,6 +161,9 @@ impl Default for GUIApp {
             screen_rx: None,
             ctrl_tx: None,
             uart_rx: None,
+            prev_frame_time: std::time::Instant::now(),
+            prev_instr_count: 0,
+            cur_instr_count: 0,
             rgba: black,
             uart_buffer: String::new(),
         }

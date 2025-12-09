@@ -11,6 +11,7 @@ pub enum Ctrl {
 pub struct ScreenMsg{
     pub screen_type: ScreenType,
     pub data: Vec<u8>,
+    pub instr_count: u64,
 }
 pub enum ScreenType {
     TextMode,
