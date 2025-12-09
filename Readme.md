@@ -10,14 +10,14 @@ This emulator's main goal is to facilitate emulation of the <a href="https://git
 ## Basic Example
 To run you can use cargo. 
 ```
-cargo run --release ./hex_programs/uart_test.hex --limit 27000000  
+cargo run --release ./elf_programs/cube_with_light.elf --limit 27000000  
 ```
 
 ### Arguments
 
-`<hex_file>` the file containing the assembly. The original PC is set in the main.rs (0x8000_0000).
+`<program_file(.hex/.elf)>` the file containing the assembly. If this is a hex file the original PC is set in the main.rs (0x8000_0000). If its an .elf file then it uses the entry point of the ELF file.
 
-`--limit <instr_num>` to run <instr_num> instructions. If it is 0 then you can run instruction by instruction by pressing enter.
+`--limit <instr_num>` to run <instr_num> instructions. If it is 0 then it rans indefinitely.
 
 `--log <log>.bin` In order to Log the execution of the emulated CPU you can enable the log flag. This logs every instruction with 14Bytes per instruction.
 
@@ -67,7 +67,7 @@ The emulator also offers a uart window where you can see logs from the program w
 
 # TODOs
 
-- **Elf loader**: Implement an .ELF loader to load applications directly from an .elf file.
+- **[Done] Elf loader**: Implement an .ELF loader to load applications directly from an .elf file.
 - **Enable Verbosity**: Re enable the cpu to print the instruction currently being executed in human readable format. This was removed from a previous version due to big performance hit.
 - **Further Extensions**: Implement further RISC-V Extensions including but not limited to the M and F extension.
 - **ZiCSR / Priviledged Execution**: Implement CSRs and traps on the cpu for priviledged execution of the cpu.

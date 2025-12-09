@@ -5,6 +5,8 @@ mod peripherals;
 mod cpu;
 mod constants;
 mod types;
+mod elf_loader;
+use elf_loader::elf_loader;
 
 use peripherals::{Ram, UartNs16550a, TextMode};
 use peripherals::ScreenHandle;
@@ -14,7 +16,6 @@ use constants::*;
 use types::{Ctrl, CtrlMessage, ScreenMsg, ScreenType};
 use crate::{bus::Device, peripherals::{ScreenCsr}};
 use std::time::Instant;
-use std::io;
 use clap::{ArgAction, Parser};
 // thread stuff
 use std::sync::mpsc;
@@ -82,7 +83,7 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
     // Start the CPU
     let limit = if args.limit == 0 { u64::MAX } else { args.limit };
     if args.limit == 0 {
-        println!("Running in interactive mode. Press Enter to step, 'q/b' to quit.");
+        println!("Running in infinite mode.");
     } else {
         println!("Running for {} cycles.", limit);
     }
@@ -96,15 +97,15 @@ fn cpu_thread(cpu: &mut Cpu, args: &Args, textmode_frame: ScreenHandle, rx: &mps
     }
     let _batch = if verbose { 1 } else { 1000 };
     for _ in 0..(limit/_batch) {
-        let mut input = String::new();
-        if args.limit == 0 {
-            io::stdin()
-                .read_line(&mut input) // reads until Enter is pressed
-                .expect("Failed to read line");
-            if input.trim() == "q" || input.trim() == "b" {
-                break;
-            }
-        }
+        // let mut input = String::new();
+        // if args.limit == 0 {
+        //     io::stdin()
+        //         .read_line(&mut input) // reads until Enter is pressed
+        //         .expect("Failed to read line");
+        //     if input.trim() == "q" || input.trim() == "b" {
+        //         break;
+        //     }
+        // }
         let event_log = cpu.tick(verbose, _batch, logging_enabled);
         if logging_enabled{
 
@@ -189,7 +190,7 @@ fn main() -> eframe::Result {
     println!("Loading program from: {:?}", args);
 
     let file_path = &args.program;
-    let ram_init = parse_hex_file(file_path).expect("Failed to parse hex file");
+
     
     // Initiate the thread communication channels
     let (ctrl_tx, ctrl_rx) = mpsc::channel::<CtrlMessage>();
@@ -208,8 +209,11 @@ fn main() -> eframe::Result {
 
     // SOMEHOW give it the screen csr struct
     let mut ram = Ram::new(1024 * 4096); // 4MB RAM
-    for (i, &value) in ram_init.iter().enumerate() {
-        ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
+    if file_path.ends_with(".hex"){
+        let ram_init = parse_hex_file(file_path).expect("Failed to parse hex file");
+        for (i, &value) in ram_init.iter().enumerate() {
+            ram.write(4, (i * 4) as u32, value).expect("Failed to write to RAM");
+        }
     }
     let vga_text_mode = TextMode::new();
     let textmode_frame = vga_text_mode.handle();
@@ -218,16 +222,18 @@ fn main() -> eframe::Result {
     bus.add_region(RAM_BASE, ram.size(), Box::new(ram));
     bus.add_region(VGA_TEXT_MODE_BASE, 1216*2, Box::new(vga_text_mode));
     bus.add_region(FLASH_BASE, flash.size(), Box::new(flash));
-    let mut cpu = Cpu::new(bus, 0x8000_0000);
+    let mut entry = 0x8000_0000;
+    if file_path.ends_with(".elf") {
+        entry = elf_loader(&mut bus, parse_bin_file(file_path).expect("Failed to parse ELF file"))
+        .expect("ELF load failed");
+    }
+    let mut cpu = Cpu::new(bus, entry);
     
 
     let thread_handle = thread::spawn(move || {
         cpu_thread(&mut cpu, &args, textmode_frame, &ctrl_rx, screen_tx);
     });
-    
-    // can use try receive to not block
-    // let received = rx.recv().unwrap();
-    // println!("Got: {received}");
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 800.0]).with_min_inner_size([800.0, 480.0]),
         ..Default::default()

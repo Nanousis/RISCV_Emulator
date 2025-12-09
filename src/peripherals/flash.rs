@@ -7,7 +7,6 @@ pub struct Flash {
     size: u32,
     data: Vec<u8>,
     addr_reg: u32,
-    data_in_reg: u32,
     ren: bool,
     wen: bool,
     // screen_csr: Arc<ScreenCSRShared>,
@@ -24,7 +23,6 @@ impl Flash {
             size: size as u32,
             data: mem,
             addr_reg: 0,
-            data_in_reg: 0,
             ren: false,
             wen: false,
         }
@@ -40,11 +38,10 @@ impl Flash {
 // #define FLASH_DATA_OUT 0x8B00000C
 impl Device for Flash {
     fn read(&mut self, size: u8, addr: Addr) -> u32 {
-        let o = addr as usize;
         match size {
             1 => {
                 if addr as usize == 0 { // ready register always ready.
-                    return 0xff;
+                    0xff
                 }
                 else {
                     panic!("Flash: Invalid read from control registers");
@@ -73,7 +70,6 @@ impl Device for Flash {
     }
 
     fn write(&mut self, size: u8, addr: Addr, value: u32) -> Result<(), ()> {
-        let o = addr as usize;
         match  size{
             1 => {
                 match addr as usize {
