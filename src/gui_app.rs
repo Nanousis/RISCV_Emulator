@@ -81,6 +81,12 @@ impl eframe::App for GUIApp {
             while let Ok(c) = rx.try_recv() {
                 // Handle received character
                 self.uart_buffer.push(c);
+                // const MAX_UART_BUFFER_SIZE: usize = 10000;
+                // if self.uart_buffer.len() > MAX_UART_BUFFER_SIZE {
+                //     // Limit buffer size
+                //     let excess = self.uart_buffer.len() - MAX_UART_BUFFER_SIZE;
+                //     self.uart_buffer.drain(0..excess);
+                // }
             }
         }
         tex.set(img, egui::TextureOptions::NEAREST); // update each frame

@@ -167,16 +167,6 @@ impl Cpu {
 
                     self.write_reg(_rd as usize, result);
 
-                    if instr_log {
-                        event_log.push(Event {
-                            pc: self.pc,
-                            opcode: instruction,
-                            instr_type: EventType::RegWrite {
-                                reg: _rd as u8,
-                                value: result,
-                            },
-                        });
-                    }
                 }
                     else{
                         match funct3 {
