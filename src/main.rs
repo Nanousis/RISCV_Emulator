@@ -201,11 +201,17 @@ fn main() -> eframe::Result {
     let mut bus = Bus::new();
 
     let screen_csr = ScreenCsr::new();
-
     let flash_file_path = &args.flash_file;
-    let flash_data = parse_bin_file(flash_file_path).expect("Failed to parse flash file");
-    let flash = peripherals::Flash::new( 1024*4096, flash_data.iter().flat_map(|&x| x.to_le_bytes()).collect());
 
+    let flash_data = parse_bin_file(flash_file_path)
+        .unwrap_or_else(|_| vec![0u32; 1024 * 4096 / 4]);
+
+    let flash = peripherals::Flash::new(
+        1024 * 4096,
+        flash_data.iter()
+            .flat_map(|&x| x.to_le_bytes())
+            .collect()
+    );
 
     // SOMEHOW give it the screen csr struct
     let mut ram = Ram::new(1024 * 4096); // 4MB RAM
