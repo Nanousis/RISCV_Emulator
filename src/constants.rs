@@ -6,7 +6,7 @@ pub const SCREEN_HEIGHT: usize = 480;
 pub const UART0_BASE: u32 = 0x1000_0000;
 pub const SCREEN_CSR_ENABLE: u32 = 0x8800_2800;
 pub const SCREEN_CSR_ADDR: u32 = 0x8800_2800;
-pub const RAM_BASE: u32 = 0x8000_0000;
+pub const RAM_BASE: u32 = 0x0000_0000;
 pub const VGA_TEXT_MODE_BASE: u32 = 0x8800_0000;
 pub const FLASH_BASE: u32 = 0x8B00_0000;
 
