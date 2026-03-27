@@ -228,7 +228,7 @@ fn main() -> eframe::Result {
     bus.add_region(RAM_BASE, ram.size(), Box::new(ram));
     bus.add_region(VGA_TEXT_MODE_BASE, 1216*2, Box::new(vga_text_mode));
     bus.add_region(FLASH_BASE, flash.size(), Box::new(flash));
-    let mut entry = 0x8000_0000;
+    let mut entry = RAM_BASE;
     if file_path.ends_with(".elf") {
         entry = elf_loader(&mut bus, parse_bin_file(file_path).expect("Failed to parse ELF file"))
         .expect("ELF load failed");
